@@ -31,7 +31,8 @@ class RDynamics(BaseDynamics, ABC):
         self.diff_dynamics = MLP(state_dim + action_dim, output_state_dim
                                  + reward_dim, hidden_dims, activation='swish', **kwargs)
 
-        def init_(m): init(m, truncated_norm_init, lambda x: nn.init.constant_(x, 0))
+        def init_(m):
+            init(m, truncated_norm_init, lambda x: nn.init.constant_(x, 0))
         self.diff_dynamics.init(init_, init_)
 
     def forward(self, states, actions):
@@ -163,3 +164,10 @@ class EnsembleRDynamics(BaseDynamics, ABC):
             network.load_state_dict(state_dict)
             best_epochs.append(epoch)
         return best_epochs
+
+class RealEnsembleDynamics(BaseDynamics, ABC):
+    def __init__(self):
+        super(RealEnsembleDynamics, self).__init__()
+
+    def predict(self, states, actions, **kwargs) -> Dict[str, torch.Tensor]:
+        pass

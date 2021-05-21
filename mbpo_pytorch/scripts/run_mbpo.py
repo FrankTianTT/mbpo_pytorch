@@ -15,7 +15,8 @@ from mbpo_pytorch.storages import SimpleUniversalBuffer as Buffer, MixtureBuffer
 
 
 def main():
-    config, hparam_dict = Config(['mbpo.yaml', 'halfcheetah.yaml', 'priv.yaml'])
+    # config, hparam_dict = Config(['mbpo.yaml', 'halfcheetah.yaml', 'priv.yaml'])
+    config, hparam_dict = Config(['mbpo.yaml', 'halfcheetah.yaml'])
     set_seed(config.seed)
     commit_and_save(config.proj_dir, config.save_dir, False)
 
