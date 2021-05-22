@@ -103,7 +103,7 @@ class EnsembleMLP(nn.Module, ABC):
         return string
 
 
-class EnsembleModel:
+class EnsembleModel(EnsembleMLP):
     def __init__(self, state_dim: int, action_dim: int, reward_dim: int, hidden_dims: List[int],
                  output_state_dim=None, ensemble_size=7):
         input_dim = state_dim + action_dim
@@ -112,17 +112,14 @@ class EnsembleModel:
 
         self.output_state_dim = output_state_dim
         self.ensemble_size = ensemble_size
-        self.ensemble_mlp = EnsembleMLP(input_dim, output_dim, hidden_dims, ensemble_size=ensemble_size)
+        super(EnsembleModel, self).__init__(input_dim, output_dim, hidden_dims, ensemble_size=ensemble_size)
 
-    def __call__(self, *args, **kwargs):
-        return self.forward_mlp(*args, **kwargs)
-
-    def forward_mlp(self, states, actions):
+    def forward(self, states, actions):
         inputs = torch.cat([states, actions], dim=1)
         inputs = torch.unsqueeze(inputs, 1)
         inputs = inputs.repeat(1, self.ensemble_size, 1)
         # print(inputs.shape)
-        outputs = self.ensemble_mlp(inputs)
+        outputs = super(EnsembleModel, self).forward(inputs)
         # print(outputs.shape)
         outputs = [{'diff_states': outputs[:, i, :self.output_state_dim * 2],
               'rewards': outputs[:, i, self.output_state_dim * 2:]}
@@ -131,7 +128,7 @@ class EnsembleModel:
 
     def compute_l2_loss(self, l2_loss_coefs: Union[float, List[float]]):
         weight_norms = []
-        for name, weight in self.ensemble_mlp.named_parameters():
+        for name, weight in self.named_parameters():
             if "weight" in name:
                 weight_norms.append(weight.norm(2))
         weight_norms = torch.stack(weight_norms, dim=0)
@@ -141,23 +138,23 @@ class EnsembleModel:
     def get_state_dict(self, index):
         assert index < self.ensemble_size
 
-        ensemble_state_dict = self.ensemble_mlp.state_dict().copy()
+        ensemble_state_dict = self.state_dict().copy()
         single_state_dict = OrderedDict()
         for i, key in enumerate(ensemble_state_dict):
             single_state_dict[key] = ensemble_state_dict[key][index]
 
         return single_state_dict
 
-    def load_state_dict(self, index, single_state_dict):
+    def set_state_dict(self, index, single_state_dict):
         assert index < self.ensemble_size
 
         new_state_dict = OrderedDict()
-        ensemble_state_dict = self.ensemble_mlp.state_dict().copy()
+        ensemble_state_dict = self.state_dict().copy()
         for i, key in enumerate(ensemble_state_dict):
             new_state_dict[key] = ensemble_state_dict[key]
             new_state_dict[key][index] = single_state_dict[key][index]
 
-        self.ensemble_mlp.load_state_dict(new_state_dict)
+        self.load_state_dict(new_state_dict)
 
 
 def test_ensemble_layer():
@@ -211,9 +208,12 @@ def test_ensemble_model():
 
     model = EnsembleModel(state_dim, action_dim, reward_dim, hidden_dims, ensemble_size)
 
-    model.get_state_dict(2)
+    state_dict = model.get_state_dict(2)
+    model.set_state_dict(2, state_dict)
 
 
 
 if __name__ == '__main__':
+    setattr(torch, 'identity', lambda x: x)
+    setattr(torch, 'swish', lambda x: x * torch.sigmoid(x))
     test_ensemble_model()

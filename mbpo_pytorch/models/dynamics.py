@@ -8,9 +8,9 @@ import torch.nn as nn
 from torch.nn.functional import softplus
 from torch.distributions import Normal
 
-from .initializer import truncated_norm_init
-from .utils import MLP, init
-from .ensemble_util import EnsembleModel
+from mbpo_pytorch.models.initializer import truncated_norm_init
+from mbpo_pytorch.models.utils import MLP, init
+from mbpo_pytorch.models.ensemble_util import EnsembleModel
 
 
 class BaseDynamics(nn.Module, ABC):
@@ -29,8 +29,8 @@ class RDynamics(BaseDynamics, ABC):
         self.output_state_dim = output_state_dim or state_dim
 
         assert getattr(kwargs, 'last_activation', 'identity') == 'identity'
-        self.diff_dynamics = MLP(state_dim + action_dim, output_state_dim
-                                 + reward_dim, hidden_dims, activation='swish', **kwargs)
+        self.diff_dynamics = MLP(self.state_dim + self.action_dim, self.output_state_dim
+                                 + self.reward_dim, hidden_dims, activation='swish', **kwargs)
 
         def init_(m):
             init(m, truncated_norm_init, lambda x: nn.init.constant_(x, 0))
@@ -296,15 +296,21 @@ def test_parallel_ensemble_dynamics():
 
     parallel_dynamics = ParallelEnsembleDynamics(state_dim, action_dim, reward_dim, hidden_dims, ensemble_size, elite_size)
     normal_dynamics = EnsembleRDynamics(state_dim, action_dim, reward_dim, hidden_dims, ensemble_size, elite_size)
+    single_dynamics = RDynamics(state_dim, action_dim, reward_dim, hidden_dims)
 
     batch_size = 256
     sampled_states = torch.randn([batch_size, state_dim])
     sampled_actions = torch.randn([batch_size, action_dim])
 
+
     normal_dynamics.elite_indices = [0, 1, 2, 3, 4]
     normal_dynamics.predict(sampled_states, sampled_actions)
     parallel_dynamics.elite_indices = [0, 1, 2, 3, 4]
     parallel_dynamics.predict(sampled_states, sampled_actions)
+
+    for p in parallel_dynamics.parameters():
+        print(p.type(), p.shape)
+
 
 if __name__ == "__main__":
     test_parallel_ensemble_dynamics()
