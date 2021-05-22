@@ -11,7 +11,7 @@ from mbpo_pytorch.configs.config import Config
 from mbpo_pytorch.envs.wrapped_envs import make_vec_envs, make_vec_virtual_envs
 from mbpo_pytorch.misc import logger
 from mbpo_pytorch.misc.utils import set_seed, get_seed, log_and_write, evaluate, commit_and_save, init_logging
-from mbpo_pytorch.models import Actor, QCritic, RunningNormalizer, EnsembleRDynamics
+from mbpo_pytorch.models import Actor, QCritic, RunningNormalizer, EnsembleRDynamics, ParallelEnsembleDynamics
 from mbpo_pytorch.storages import SimpleUniversalBuffer as Buffer, MixtureBuffer
 
 def main():
@@ -43,9 +43,12 @@ def main():
     state_normalizer.to(device)
     action_normalizer.to(device)
 
-    dynamics = EnsembleRDynamics(state_dim, action_dim, 1, config.mbpo.dynamics_hidden_dims,
-                                 mb_config.num_dynamics_networks, mb_config.num_elite_dynamics_networks,
-                                 state_normalizer, action_normalizer)
+    # dynamics = EnsembleRDynamics(state_dim, action_dim, 1, config.mbpo.dynamics_hidden_dims,
+    #                              mb_config.num_dynamics_networks, mb_config.num_elite_dynamics_networks,
+    #                              state_normalizer, action_normalizer)
+    dynamics = ParallelEnsembleDynamics(state_dim, action_dim, 1, config.mbpo.dynamics_hidden_dims,
+                                        mb_config.num_dynamics_networks, mb_config.num_elite_dynamics_networks,
+                                        state_normalizer, action_normalizer)
     dynamics.to(device)
 
     actor = Actor(state_dim, action_space, mf_config.actor_hidden_dims, state_normalizer=None,

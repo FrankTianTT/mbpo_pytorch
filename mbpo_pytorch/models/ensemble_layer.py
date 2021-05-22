@@ -3,6 +3,11 @@ import torch.nn as nn
 import math
 import numpy as np
 
+from collections import OrderedDict
+
+from typing import List, Dict, Union, Optional
+
+
 from abc import ABC
 
 
@@ -100,6 +105,63 @@ class EnsembleMLP(nn.Module, ABC):
         return string
 
 
+class EnsembleModel:
+    def __init__(self, state_dim: int, action_dim: int, reward_dim: int, hidden_dims: List[int],
+                 output_state_dim=None, ensemble_size=7):
+        input_dim = state_dim + action_dim
+        output_state_dim = output_state_dim or state_dim
+        output_dim = (output_state_dim + reward_dim) * 2
+
+        self.output_state_dim = output_state_dim
+        self.ensemble_size = ensemble_size
+        self.ensemble_mlp = EnsembleMLP(input_dim, output_dim, hidden_dims, ensemble_size=ensemble_size)
+
+    def __call__(self, *args, **kwargs):
+        return self.forward_mlp(*args, **kwargs)
+
+    def forward_mlp(self, states, actions):
+        inputs = torch.cat([states, actions], dim=1)
+        inputs = torch.unsqueeze(inputs, 1)
+        inputs = inputs.repeat(1, self.ensemble_size, 1)
+        # print(inputs.shape)
+        outputs = self.ensemble_mlp(inputs)
+        # print(outputs.shape)
+        outputs = [{'diff_states': outputs[:, i, :self.output_state_dim * 2],
+              'rewards': outputs[:, i, self.output_state_dim * 2:]}
+             for i in range(self.ensemble_size)]
+        return outputs
+
+    def compute_l2_loss(self, l2_loss_coefs: Union[float, List[float]]):
+        weight_norms = []
+        for name, weight in self.ensemble_mlp.named_parameters():
+            if "weight" in name:
+                weight_norms.append(weight.norm(2))
+        weight_norms = torch.stack(weight_norms, dim=0)
+        weight_decay = (torch.tensor(l2_loss_coefs, device=weight_norms.device) * weight_norms).sum()
+        return weight_decay
+
+    def get_state_dict(self, index):
+        assert index < self.ensemble_size
+
+        ensemble_state_dict = self.ensemble_mlp.state_dict().copy()
+        single_state_dict = OrderedDict()
+        for i, key in enumerate(ensemble_state_dict):
+            single_state_dict[key] = ensemble_state_dict[key][index]
+
+        return single_state_dict
+
+    def load_state_dict(self, index, single_state_dict):
+        assert index < self.ensemble_size
+
+        new_state_dict = OrderedDict()
+        ensemble_state_dict = self.ensemble_mlp.state_dict().copy()
+        for i, key in enumerate(ensemble_state_dict):
+            new_state_dict[key] = ensemble_state_dict[key]
+            new_state_dict[key][index] = single_state_dict[key][index]
+
+        self.ensemble_mlp.load_state_dict(new_state_dict)
+
+
 def test_ensemble_layer():
     batch_size, ensemble_size, input_dim, output_dim = 128, 7, 32, 64
 
@@ -137,8 +199,23 @@ def test_ensemble_mlp():
     input_torch = torch.from_numpy(input_numpy).type(dtype='torch.FloatTensor')
     output_torch = model(input_torch)
 
-    print(output_torch.shape)
+    # print(output_torch.shape)
+
+
+def test_ensemble_model():
+    import gym
+    env = gym.make("CartPole-v1")
+    state_dim = env.observation_space.shape[0]
+    action_dim = env.action_space.n
+    reward_dim = 1
+    hidden_dims = [200, 200]
+    ensemble_size = 7
+
+    model = EnsembleModel(state_dim, action_dim, reward_dim, hidden_dims, ensemble_size)
+
+    model.get_state_dict(2)
+
 
 
 if __name__ == '__main__':
-    test_ensemble_mlp()
+    test_ensemble_model()
