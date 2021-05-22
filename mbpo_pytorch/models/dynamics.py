@@ -12,6 +12,10 @@ from mbpo_pytorch.models.initializer import truncated_norm_init
 from mbpo_pytorch.models.utils import MLP, init
 from mbpo_pytorch.models.ensemble_util import EnsembleModel
 
+# from .initializer import truncated_norm_init
+# from .utils import MLP, init
+# from .ensemble_util import EnsembleModel
+
 
 class BaseDynamics(nn.Module, ABC):
     @abstractmethod
@@ -280,7 +284,7 @@ class ParallelEnsembleDynamics(BaseDynamics, ABC):
     def load_best_snapshots(self) -> List[int]:
         best_epochs = []
         for idx, (_, epoch, state_dict) in enumerate(self.best_snapshots):
-            self.networks.load_state_dict(idx, state_dict)
+            self.networks.set_state_dict(idx, state_dict)
             best_epochs.append(epoch)
         return best_epochs
 
