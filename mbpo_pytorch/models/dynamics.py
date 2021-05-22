@@ -294,13 +294,14 @@ def test_parallel_ensemble_dynamics():
     state_dim = env.observation_space.shape[0]
     action_dim = env.action_space.n
     reward_dim = 1
-    hidden_dims = [200, 200]
+    hidden_dims = [200, 200, 200]
     ensemble_size = 7
     elite_size = 5
 
     parallel_dynamics = ParallelEnsembleDynamics(state_dim, action_dim, reward_dim, hidden_dims, ensemble_size, elite_size)
     normal_dynamics = EnsembleRDynamics(state_dim, action_dim, reward_dim, hidden_dims, ensemble_size, elite_size)
     single_dynamics = RDynamics(state_dim, action_dim, reward_dim, hidden_dims)
+
 
     batch_size = 256
     sampled_states = torch.randn([batch_size, state_dim])
@@ -312,8 +313,7 @@ def test_parallel_ensemble_dynamics():
     parallel_dynamics.elite_indices = [0, 1, 2, 3, 4]
     parallel_dynamics.predict(sampled_states, sampled_actions)
 
-    for p in parallel_dynamics.parameters():
-        print(p.type(), p.shape)
+    parallel_dynamics.compute_l2_loss([0.000025, 0.00005, 0.000075, 0.000075])
 
 
 if __name__ == "__main__":

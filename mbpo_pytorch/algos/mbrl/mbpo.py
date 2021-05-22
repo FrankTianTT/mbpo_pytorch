@@ -33,7 +33,7 @@ class MBPO:
         @param batch_size:
         @param max_num_epochs:
         @param rollout_schedule:
-        @param l2_loss_coefs:
+        @param l2_loss_coefs: a list of l2_loss_coefs used to avoid over-fitting
         @param lr:
         @param max_grad_norm:
         @param verbose:
