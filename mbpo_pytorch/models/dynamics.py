@@ -8,9 +8,9 @@ import torch.nn as nn
 from torch.nn.functional import softplus
 from torch.distributions import Normal
 
-from mbpo_pytorch.models.initializer import truncated_norm_init
-from mbpo_pytorch.models.utils import MLP, init
-from mbpo_pytorch.models.ensemble_layer import EnsembleModel
+from .initializer import truncated_norm_init
+from .utils import MLP, init
+from .ensemble_layer import EnsembleModel
 
 
 class BaseDynamics(nn.Module, ABC):

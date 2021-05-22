@@ -71,10 +71,8 @@ class EnsembleMLP(nn.Module, ABC):
         super(EnsembleMLP, self).__init__()
         sizes_list = hidden_dims.copy()
         self.activation = getattr(torch, activation)
-        if last_activation == 'identity':
-            self.last_activation = lambda x: x
-        else:
-            self.last_activation = getattr(torch, last_activation)
+        # setattr in __init__.py of models
+        self.last_activation = getattr(torch, last_activation)
         self.ensemble_size = ensemble_size
 
         sizes_list.insert(0, input_dim)
