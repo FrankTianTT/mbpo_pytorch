@@ -10,7 +10,7 @@ from torch.distributions import Normal
 
 from .initializer import truncated_norm_init
 from .utils import MLP, init
-from .ensemble_layer import EnsembleModel
+from .ensemble_util import EnsembleModel
 
 
 class BaseDynamics(nn.Module, ABC):
@@ -305,8 +305,6 @@ def test_parallel_ensemble_dynamics():
     normal_dynamics.predict(sampled_states, sampled_actions)
     parallel_dynamics.elite_indices = [0, 1, 2, 3, 4]
     parallel_dynamics.predict(sampled_states, sampled_actions)
-
-
 
 if __name__ == "__main__":
     test_parallel_ensemble_dynamics()

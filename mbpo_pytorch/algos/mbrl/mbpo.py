@@ -58,9 +58,11 @@ class MBPO:
         assert {'states', 'actions', 'rewards', 'masks', 'next_states'}.issubset(buffer.entry_infos.keys())
 
     def compute_loss(self, samples: Dict[str, torch.Tensor], use_var_loss=True, use_l2_loss=True):
+        # TODO: train ensemble network by different samples, instead of only same one.
         states, actions, next_states, rewards, masks = \
             itemgetter('states', 'actions', 'next_states', 'rewards', 'masks')(samples)
 
+        # forward use dynamics
         diff_state_means, diff_state_logvars, reward_means, reward_logvars = \
             itemgetter('diff_state_means', 'diff_state_logvars', 'reward_means', 'reward_logvars') \
                 (self.dynamics.forward(states, actions))
@@ -68,6 +70,7 @@ class MBPO:
         means, logvars = torch.cat([diff_state_means, reward_means], dim=-1), \
                          torch.cat([diff_state_logvars, reward_logvars], dim=-1)
         targets = torch.cat([next_states - states, rewards], dim=-1)
+        # size: ensemble-size * batch-size * (state-dim + reward-dim)
         targets, masks = targets.repeat(means.shape[0], 1, 1), masks.repeat(means.shape[0], 1, 1)
 
         if use_var_loss:
@@ -85,6 +88,7 @@ class MBPO:
         else:
             return model_losses, None
 
+    # train model use real-buffer
     def update(self, model_buffer: Buffer) -> Dict[str, float]:
         model_loss_epoch = 0.
         l2_loss_epoch = 0.
@@ -125,10 +129,13 @@ class MBPO:
             with torch.no_grad():
                 val_model_loss, _ = self.compute_loss(next(val_gen), False, False)
             updated = self.dynamics.update_best_snapshots(val_model_loss, epoch)
+
+            # updated == True, means training is useful.
             if updated:
                 num_epoch_after_update = 0
             else:
                 num_epoch_after_update += 1
+            # if training is useless for 5 epoch, stop training.
             if num_epoch_after_update > 5:
                 break
 
