@@ -59,6 +59,17 @@ class RDynamics(BaseDynamics, ABC):
 class EnsembleRDynamics(BaseDynamics, ABC):
     def __init__(self,  state_dim: int, action_dim: int, reward_dim: int, hidden_dims: List[int],
                  num_networks, num_elite_networks, state_normalizer=None, action_normalizer=None):
+        """
+
+        @param state_dim:
+        @param action_dim:
+        @param reward_dim: usually 1
+        @param hidden_dims: hidden layers size of NN
+        @param num_networks: ensemble size
+        @param num_elite_networks:
+        @param state_normalizer:
+        @param action_normalizer:
+        """
         super(EnsembleRDynamics, self).__init__()
         self.state_dim = state_dim
         self.reward_dim = reward_dim
@@ -165,9 +176,28 @@ class EnsembleRDynamics(BaseDynamics, ABC):
             best_epochs.append(epoch)
         return best_epochs
 
-class RealEnsembleDynamics(BaseDynamics, ABC):
-    def __init__(self):
-        super(RealEnsembleDynamics, self).__init__()
+class ParallelEnsembleDynamics(BaseDynamics, ABC):
+    def __init__(self, state_dim: int, action_dim: int, reward_dim: int, hidden_dims: List[int],
+                 num_networks, num_elite_networks, state_normalizer=None, action_normalizer=None):
+        super(ParallelEnsembleDynamics, self).__init__()
+        self.state_dim = state_dim
+        self.reward_dim = reward_dim
+        self.num_networks = num_networks
+
+        self.networks = nn.ModuleList([RDynamics(state_dim, action_dim, 2 * reward_dim, hidden_dims, 2 * state_dim)
+                                       for _ in range(num_networks)])
+
+        self.max_diff_state_logvar = nn.Parameter(torch.ones([1, state_dim]) / 2.)
+        self.min_diff_state_logvar = nn.Parameter(-torch.ones([1, state_dim]) * 10.)
+        self.max_reward_logvar = nn.Parameter(torch.ones([1, reward_dim]) / 2.)
+        self.min_reward_logvar = nn.Parameter(-torch.ones([1, reward_dim]) * 10.)
+
+        self.state_normalizer = state_normalizer or nn.Identity()
+        self.action_normalizer = action_normalizer or nn.Identity()
+        self.num_elite_networks = num_elite_networks
+        self.elite_indices = None
+
+        self.best_snapshots = [(None, 0, None) for _ in self.networks]
 
     def predict(self, states, actions, **kwargs) -> Dict[str, torch.Tensor]:
         pass

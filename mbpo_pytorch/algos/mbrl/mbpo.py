@@ -27,6 +27,17 @@ def split_model_buffer(buffer: Buffer, ratio: float):
 class MBPO:
     def __init__(self, dynamics: BaseDynamics, batch_size: int, max_num_epochs: int,
                  rollout_schedule: List[int], l2_loss_coefs: List[float], lr, max_grad_norm=2, verbose=0):
+        """
+
+        @param dynamics: pytorch neural network
+        @param batch_size:
+        @param max_num_epochs:
+        @param rollout_schedule:
+        @param l2_loss_coefs:
+        @param lr:
+        @param max_grad_norm:
+        @param verbose:
+        """
         self.dynamics = dynamics
         self.epoch = 0
 

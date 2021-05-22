@@ -16,7 +16,7 @@ from mbpo_pytorch.thirdparty.monitor import Monitor
 if TYPE_CHECKING:
     from mbpo_pytorch.models.dynamics import BaseDynamics
 
-
+# 返回一个函数构造器？
 def make_env(env_id, seed, rank, log_dir, allow_early_resets, max_episode_steps):
     def _thunk():
         env = make_benchmarking_env(env_id)

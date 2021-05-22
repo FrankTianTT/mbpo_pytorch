@@ -1,4 +1,5 @@
 import time
+from tqdm import tqdm
 from collections import deque
 
 import numpy as np
@@ -13,10 +14,9 @@ from mbpo_pytorch.misc.utils import set_seed, get_seed, log_and_write, evaluate,
 from mbpo_pytorch.models import Actor, QCritic, RunningNormalizer, EnsembleRDynamics
 from mbpo_pytorch.storages import SimpleUniversalBuffer as Buffer, MixtureBuffer
 
-
 def main():
-    # config, hparam_dict = Config(['mbpo.yaml', 'halfcheetah.yaml', 'priv.yaml'])
-    config, hparam_dict = Config(['mbpo.yaml', 'halfcheetah.yaml'])
+    # priv.yaml is used for special config
+    config, hparam_dict = Config(['mbpo.yaml', 'halfcheetah.yaml', 'priv.yaml'])
     set_seed(config.seed)
     commit_and_save(config.proj_dir, config.save_dir, False)
 
@@ -34,6 +34,7 @@ def main():
     action_space = real_envs.action_space
     action_dim = action_space.shape[0]
 
+    # s, a, r, s'
     datatype = {'states': {'dims': [state_dim]}, 'next_states': {'dims': [state_dim]},
                 'actions': {'dims': [action_dim]}, 'rewards': {'dims': [1]}, 'masks': {'dims': [1]}}
 
@@ -66,23 +67,26 @@ def main():
                 mf_config.num_grad_steps, config.env.gamma, 1.0, mf_config.actor_lr, mf_config.critic_lr,
                 mf_config.soft_target_tau, target_entropy=target_entropy)
 
+    # virtual envs are defined by the MODEL
+    # attention: done is True or False, is defined by the real env
     virtual_envs = make_vec_virtual_envs(config.env.env_name, dynamics, get_seed(), 0, config.env.gamma, device,
                                          use_predicted_reward=True)
 
     base_virtual_buffer_size = mb_config.rollout_batch_size * config.env.max_episode_steps * \
                                mb_config.num_model_retain_epochs // mb_config.model_update_interval
-
+    # buffer to train agent
     virtual_buffer = Buffer(base_virtual_buffer_size, datatype)
     virtual_buffer.to(device)
     agent.check_buffer(virtual_buffer)
 
     model = MBPO(dynamics, mb_config.dynamics_batch_size, rollout_schedule=mb_config.rollout_schedule, verbose=1,
                  lr=mb_config.lr, l2_loss_coefs=config.mbpo.l2_loss_coefs, max_num_epochs=mb_config.max_num_epochs)
-
+    # buffer to train model
     real_buffer = Buffer(mb_config.real_buffer_size, datatype)
     real_buffer.to(device)
     model.check_buffer(real_buffer)
 
+    # train agent with sample from real env
     if mb_config.real_sample_ratio > 0:
         policy_buffer = MixtureBuffer([virtual_buffer, real_buffer],
                                       [(1 - mb_config.real_sample_ratio), mb_config.real_sample_ratio])
@@ -112,7 +116,9 @@ def main():
     real_episode_rewards = deque(maxlen=30)
     real_episode_lengths = deque(maxlen=30)
 
-    for _ in range(mb_config.num_warmup_samples):
+    # warm up, sample from real env to train model
+    for _ in tqdm(range(mb_config.num_warmup_samples), "warm up"):
+        # use random policy
         real_actions = torch.tensor([real_envs.action_space.sample() for _ in range(config.env.num_real_envs)]).to(
             device)
         real_next_states, real_rewards, real_dones, real_infos = real_envs.step(real_actions)
@@ -137,8 +143,10 @@ def main():
 
         model.update_rollout_length(epoch)
 
+        # train model
         for i in range(config.env.max_episode_steps):
             losses = {}
+            # run mbpo per model-update-interval
             if i % mb_config.model_update_interval == 0:
                 recent_states, recent_actions = itemgetter('states', 'actions') \
                     (real_buffer.get_recent_samples(mb_config.model_update_interval))
@@ -149,8 +157,10 @@ def main():
                 initial_states = next(real_buffer.get_batch_generator_inf(mb_config.rollout_batch_size))['states']
                 new_virtual_buffer_size = base_virtual_buffer_size * model.num_rollout_steps
                 virtual_buffer.resize(new_virtual_buffer_size)
+                # generate new virtual data, and add to virtual buffer
                 model.generate_data(virtual_envs, virtual_buffer, initial_states, actor)
 
+            # sample from real env
             with torch.no_grad():
                 real_actions = actor.act(real_states)['actions']
 
@@ -162,6 +172,7 @@ def main():
             real_episode_rewards.extend([info['episode']['r'] for info in real_infos if 'episode' in info])
             real_episode_lengths.extend([info['episode']['l'] for info in real_infos if 'episode' in info])
 
+            # train agent by sample from the policy buffer
             losses.update(agent.update(policy_buffer))
 
             # only keys with '/' will be recorded in the tensorboard

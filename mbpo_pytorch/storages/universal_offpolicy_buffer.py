@@ -10,7 +10,6 @@ from torch.utils.data.sampler import RandomSampler, BatchSampler, SubsetRandomSa
 
 from mbpo_pytorch.misc import logger
 
-
 # noinspection DuplicatedCode
 class SimpleUniversalBuffer:
     def __init__(self, buffer_size: int, entry_dict: Dict[str, dict], **kwargs):

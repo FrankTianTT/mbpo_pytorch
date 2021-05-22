@@ -28,6 +28,7 @@ class RunningNormalizer(nn.Module, ABC):
         self.mean = self.mean.to(*args, **kwargs)
         self.var = self.var.to(*args, **kwargs)
 
+    # 更新数据的mean，var和count
     def update(self, samples: torch.Tensor):
         sample_count = samples.shape[0]
         sample_mean = samples.mean(dim=0)
@@ -35,6 +36,7 @@ class RunningNormalizer(nn.Module, ABC):
         delta = sample_mean - self.mean
         total_count = self.count + sample_count
 
+        # 增量平均
         new_mean = self.mean + delta * sample_count / total_count
         m_a = self.var * self.count
         m_b = sample_var * sample_count
