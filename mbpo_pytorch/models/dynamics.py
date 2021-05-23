@@ -203,8 +203,8 @@ class ParallelEnsembleDynamics(BaseDynamics, ABC):
 
         self.reset_best_snapshots()
 
-
     def forward(self, states, actions) -> Dict[str, torch.Tensor]:
+        # input size: batch-size * ensemble-size * dim
         states, actions = self.state_normalizer(states), self.action_normalizer(actions)
         outputs = self.networks(states, actions)
         outputs = {k: [dic[k] for dic in outputs] for k in outputs[0]}
@@ -243,11 +243,16 @@ class ParallelEnsembleDynamics(BaseDynamics, ABC):
         assert self.elite_indices is not None
         batch_size = states.shape[0]
 
+        repeat_states = torch.unsqueeze(states, 1)
+        repeat_actions = torch.unsqueeze(actions, 1)
+        repeat_states = repeat_states.repeat(1, self.num_networks, 1)
+        repeat_actions = repeat_actions.repeat(1, self.num_networks, 1)
+
         # only use elite networks for prediction
         indices = np.random.choice(self.elite_indices, batch_size)
         diff_state_means, diff_state_logvars, reward_means, reward_logvars = \
             itemgetter('diff_state_means', 'diff_state_logvars', 'reward_means', 'reward_logvars')\
-                (self.forward(states, actions))
+                (self.forward(repeat_states, repeat_actions))
 
         diff_state_means, diff_state_logvars = diff_state_means[indices, np.arange(batch_size)], \
                                                diff_state_logvars[indices, np.arange(batch_size)]

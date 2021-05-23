@@ -115,9 +115,8 @@ class EnsembleModel(EnsembleMLP):
         super(EnsembleModel, self).__init__(input_dim, output_dim, hidden_dims, ensemble_size=ensemble_size)
 
     def forward(self, states, actions):
-        inputs = torch.cat([states, actions], dim=1)
-        inputs = torch.unsqueeze(inputs, 1)
-        inputs = inputs.repeat(1, self.ensemble_size, 1)
+        # input size: batch-size * ensemble-size * dim
+        inputs = torch.cat([states, actions], dim=-1)
         # print(inputs.shape)
         outputs = super(EnsembleModel, self).forward(inputs)
         # print(outputs.shape)

@@ -41,6 +41,8 @@ class MBPO:
         self.dynamics = dynamics
         self.epoch = 0
 
+        self.num_networks = self.dynamics.num_networks
+
         self.max_num_epochs = max_num_epochs
         self.num_rollout_steps = 0
         self.rollout_schedule = rollout_schedule
@@ -57,11 +59,31 @@ class MBPO:
     def check_buffer(buffer):
         assert {'states', 'actions', 'rewards', 'masks', 'next_states'}.issubset(buffer.entry_infos.keys())
 
-    def compute_loss(self, samples: Dict[str, torch.Tensor], use_var_loss=True, use_l2_loss=True):
-        # TODO: train ensemble network by different samples, instead of only same one.
-        states, actions, next_states, rewards, masks = \
-            itemgetter('states', 'actions', 'next_states', 'rewards', 'masks')(samples)
+    def get_ensemble_samples(self, samples: Dict[str, torch.Tensor]):
+        attrs = ['states', 'actions', 'next_states', 'rewards', 'masks']
+        batch_size = samples[attrs[0]].shape[0]
+        idxes = np.random.randint(batch_size, size=[batch_size, self.num_networks])
 
+        # size: (e.g. states)
+        # batch-size * ensemble-size * state-dim
+        return [samples[attr][idxes] for attr in attrs]
+
+    def get_repeat_samples(self, samples: Dict[str, torch.Tensor]):
+        attrs = ['states', 'actions', 'next_states', 'rewards', 'masks']
+        value_list = []
+        for attr in attrs:
+            value = samples[attr]
+            value = torch.unsqueeze(value, 1)
+            value_list.append(value.repeat(1, self.num_networks, 1))
+        return value_list
+
+    def compute_loss(self, samples: Dict[str, torch.Tensor], use_var_loss=True, use_l2_loss=True, ensemble=True):
+        if ensemble:
+            states, actions, next_states, rewards, masks = self.get_ensemble_samples(samples)
+        else:
+            states, actions, next_states, rewards, masks = self.get_repeat_samples(samples)
+
+        batch_size = states.shape[0]
         # forward use dynamics
         diff_state_means, diff_state_logvars, reward_means, reward_logvars = \
             itemgetter('diff_state_means', 'diff_state_logvars', 'reward_means', 'reward_logvars') \
@@ -69,9 +91,11 @@ class MBPO:
 
         means, logvars = torch.cat([diff_state_means, reward_means], dim=-1), \
                          torch.cat([diff_state_logvars, reward_logvars], dim=-1)
+        # size: batch-size * ensemble-size * (state-dim + reward-dim)
         targets = torch.cat([next_states - states, rewards], dim=-1)
         # size: ensemble-size * batch-size * (state-dim + reward-dim)
-        targets, masks = targets.repeat(means.shape[0], 1, 1), masks.repeat(means.shape[0], 1, 1)
+        targets = targets.transpose(0, 1).contiguous()
+        masks = masks.transpose(0, 1).contiguous()
 
         if use_var_loss:
             inv_vars = torch.exp(-logvars)
@@ -111,7 +135,7 @@ class MBPO:
             val_gen = model_buffer.get_batch_generator_epoch(None, val_indices)
 
             for samples in train_gen:
-                train_model_loss, train_l2_loss = self.compute_loss(samples, True, True)
+                train_model_loss, train_l2_loss = self.compute_loss(samples, True, True, True)
                 train_model_loss, train_l2_loss = train_model_loss.sum(), train_l2_loss.sum()
                 train_model_loss += \
                     0.01 * (torch.sum(self.dynamics.max_diff_state_logvar) + torch.sum(self.dynamics.max_reward_logvar) -
@@ -127,7 +151,7 @@ class MBPO:
                 num_updates += 1
 
             with torch.no_grad():
-                val_model_loss, _ = self.compute_loss(next(val_gen), False, False)
+                val_model_loss, _ = self.compute_loss(next(val_gen), False, False, False)
             updated = self.dynamics.update_best_snapshots(val_model_loss, epoch)
 
             # updated == True, means training is useful.
@@ -146,7 +170,7 @@ class MBPO:
         # load best snapshots, which is evaluated by validation set.
         best_epochs = self.dynamics.load_best_snapshots()
         with torch.no_grad():
-            val_model_loss, _ = self.compute_loss(next(val_gen), False, False)
+            val_model_loss, _ = self.compute_loss(next(val_gen), False, False, False)
         self.dynamics.update_elite_indices(val_model_loss)
 
         if self.verbose > 0:
@@ -158,6 +182,7 @@ class MBPO:
         return {'model_loss': model_loss_epoch, 'l2_loss': l2_loss_epoch}
 
     def update_rollout_length(self, epoch: int):
+        # update the rollout_length by the value of epoch
         min_epoch, max_epoch, min_length, max_length = self.rollout_schedule
         if epoch <= min_epoch:
             y = min_length
@@ -182,6 +207,7 @@ class MBPO:
             policy_buffer.insert(states=states, actions=actions, masks=masks, rewards=rewards,
                                  next_states=next_states)
             num_total_samples += next_states.shape[0]
+            # states which are not done
             states = next_states[torch.where(torch.gt(masks, 0.5))[0], :]
             if states.shape[0] == 0:
                 logger.warn('[ Model Rollout ] Breaking early: {}'.format(step))
@@ -189,3 +215,33 @@ class MBPO:
         if self.verbose:
             logger.log('[ Model Rollout ] {} samples with average rollout length {:.2f}'.
                        format(num_total_samples, num_total_samples / batch_size))
+
+
+def test():
+    from mbpo_pytorch.models.dynamics import ParallelEnsembleDynamics
+    import gym
+    env = gym.make("CartPole-v1")
+    state_dim = env.observation_space.shape[0]
+    action_dim = env.action_space.n
+    reward_dim = 1
+    hidden_dims = [200, 200, 200, 200]
+    ensemble_size = 7
+    elite_size = 5
+
+    parallel_dynamics = ParallelEnsembleDynamics(state_dim, action_dim, reward_dim, hidden_dims, ensemble_size,
+                                                 elite_size)
+
+    dynamics_batch_size = 256
+    rollout_schedule = [20, 150, 1, 15]
+    lr = 1.0e-3
+    l2_loss_coefs = [0.000025, 0.00005, 0.000075, 0.000075, 0.0001]
+    max_num_epochs = 100
+
+    model = MBPO(parallel_dynamics, dynamics_batch_size, rollout_schedule=rollout_schedule, verbose=1,
+                 lr=lr, l2_loss_coefs=l2_loss_coefs, max_num_epochs=max_num_epochs)
+
+    model.get_ensemble_samples(None)
+
+
+if __name__ == "__main__":
+    test()

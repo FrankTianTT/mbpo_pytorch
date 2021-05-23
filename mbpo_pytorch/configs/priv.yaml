@@ -1,6 +1,2 @@
 device: 'cuda:1'
 proj_dir: '/home/amax/thl/causal_mbpo_torch/experiments'
-
-mbpo:
-    dynamics_hidden_dims: [ 200, 200 ]
-    l2_loss_coefs: [ 0.000025, 0.00005, 0.000075 ]
