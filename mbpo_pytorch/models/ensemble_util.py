@@ -159,21 +159,18 @@ class EnsembleModel(EnsembleMLP):
 def test_ensemble_layer():
     batch_size, ensemble_size, input_dim, output_dim = 128, 7, 32, 64
 
-    # numpy
-    input_numpy = np.random.randn(batch_size, input_dim)
-    input_numpy = np.expand_dims(input_numpy, 1)
-    input_numpy = np.tile(input_numpy, [1, ensemble_size, 1])
-    weight = np.random.randn(ensemble_size, input_dim, output_dim)
-    output_numpy = np.einsum("abc,bcd->abd", input_numpy, weight)
+    inputs = torch.randn(batch_size, input_dim)
+    inputs = torch.unsqueeze(inputs, 1)
+    inputs = inputs.repeat([1, ensemble_size, 1])
+    weights = torch.rand(ensemble_size, input_dim, output_dim)
+    outputs = torch.einsum("abc,bcd->abd", inputs, weights)
 
-    # torch
-    input_torch = torch.from_numpy(input_numpy).type(dtype='torch.FloatTensor')
-    ensemble_layer = EnsembleLayer(ensemble_size, input_dim, output_dim, bias=False)
-    ensemble_layer.weight.data[:] = torch.from_numpy(weight).type(dtype='torch.FloatTensor')
-    output_torch = ensemble_layer(input_torch)
+    ensemble_layer = EnsembleLayer(input_dim, output_dim, ensemble_size=ensemble_size, bias=False)
+    ensemble_layer.weight.data[:] = weights
+    output_torch = ensemble_layer(inputs)
 
     # compare
-    print(torch.allclose(output_torch, torch.from_numpy(output_numpy)))
+    print(torch.allclose(output_torch, outputs))
 
 def test_ensemble_mlp():
     batch_size = 256
@@ -185,15 +182,13 @@ def test_ensemble_mlp():
 
     # print(model)
 
-    input_numpy = np.random.randn(batch_size, input_dim)
-    input_numpy = np.expand_dims(input_numpy, 1)
-    input_numpy = np.tile(input_numpy, [1, ensemble_size, 1])
+    inputs = torch.randn(batch_size, input_dim)
+    inputs = torch.unsqueeze(inputs, 1)
+    inputs = inputs.repeat([1, ensemble_size, 1])
 
-    # torch.set_default_dtype(torch.double)
-    input_torch = torch.from_numpy(input_numpy).type(dtype='torch.FloatTensor')
-    output_torch = model(input_torch)
+    outputs = model(inputs)
 
-    # print(output_torch.shape)
+    print(outputs.shape)
 
 
 def test_ensemble_model():
@@ -215,4 +210,7 @@ def test_ensemble_model():
 if __name__ == '__main__':
     setattr(torch, 'identity', lambda x: x)
     setattr(torch, 'swish', lambda x: x * torch.sigmoid(x))
-    test_ensemble_model()
+
+    # test_ensemble_model()
+
+    test_ensemble_mlp()
