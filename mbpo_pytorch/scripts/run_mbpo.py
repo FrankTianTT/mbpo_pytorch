@@ -146,7 +146,6 @@ def main():
 
         model.update_rollout_length(epoch)
 
-        # train model
         for i in range(config.env.max_episode_steps):
             losses = {}
             # run mbpo per model-update-interval

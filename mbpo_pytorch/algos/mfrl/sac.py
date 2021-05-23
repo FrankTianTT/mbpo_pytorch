@@ -8,6 +8,8 @@ from torch import nn as nn
 
 from mbpo_pytorch.models.utils import soft_update
 
+from tqdm import tqdm
+
 if TYPE_CHECKING:
     from mbpo_pytorch.models import Actor, QCritic
     from mbpo_pytorch.storages import SimpleUniversalBuffer as Buffer
@@ -90,7 +92,6 @@ class SAC:
         alpha_loss_epoch = 0.
 
         for _ in range(self.num_grad_steps):
-
             samples = next(data_generator)
 
             states, actions, rewards, masks, next_states = \
