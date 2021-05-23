@@ -271,8 +271,8 @@ class ParallelEnsembleDynamics(BaseDynamics, ABC):
             loss = loss.item()
             best_loss: Optional[float] = snapshot[0]
             improvement_ratio = ((best_loss - loss) / best_loss) if best_loss else 0.
-            if (best_loss is None) or improvement_ratio > 0.01:
-                # noinspection PyTypeChecker
+            if (best_loss is None) or improvement_ratio > 0.1:
+                # print(self.networks.get_state_dict(idx))
                 self.best_snapshots[idx] = (loss, epoch, self.networks.get_state_dict(idx))
                 updated = True
         return updated

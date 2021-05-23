@@ -138,10 +138,10 @@ class EnsembleModel(EnsembleMLP):
     def get_state_dict(self, index):
         assert index < self.ensemble_size
 
-        ensemble_state_dict = self.state_dict().copy()
+        ensemble_state_dict = self.state_dict()
         single_state_dict = OrderedDict()
         for i, key in enumerate(ensemble_state_dict):
-            single_state_dict[key] = ensemble_state_dict[key][index]
+            single_state_dict[key] = ensemble_state_dict[key][index].clone()
 
         return single_state_dict
 
@@ -149,10 +149,10 @@ class EnsembleModel(EnsembleMLP):
         assert index < self.ensemble_size
 
         new_state_dict = OrderedDict()
-        ensemble_state_dict = self.state_dict().copy()
+        ensemble_state_dict = self.state_dict()
         for i, key in enumerate(ensemble_state_dict):
-            new_state_dict[key] = ensemble_state_dict[key]
-            new_state_dict[key][index] = single_state_dict[key][index]
+            new_state_dict[key] = ensemble_state_dict[key].clone()
+            new_state_dict[key][index] = single_state_dict[key].clone()
 
         self.load_state_dict(new_state_dict)
 

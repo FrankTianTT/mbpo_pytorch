@@ -128,6 +128,7 @@ class MBPO:
 
             with torch.no_grad():
                 val_model_loss, _ = self.compute_loss(next(val_gen), False, False)
+                # print("valid loss:", val_model_loss)
             updated = self.dynamics.update_best_snapshots(val_model_loss, epoch)
 
             # updated == True, means training is useful.
@@ -143,9 +144,11 @@ class MBPO:
         l2_loss_epoch /= num_updates
 
         val_gen = model_buffer.get_batch_generator_epoch(None, val_indices)
+        # load best snapshots, which is evaluated by validation set.
         best_epochs = self.dynamics.load_best_snapshots()
         with torch.no_grad():
             val_model_loss, _ = self.compute_loss(next(val_gen), False, False)
+            # print("final loss:", val_model_loss)
         self.dynamics.update_elite_indices(val_model_loss)
 
         if self.verbose > 0:
