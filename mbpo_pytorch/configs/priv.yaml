@@ -1,5 +1,2 @@
 device: 'cuda:1'
 proj_dir: '/home/amax/thl/causal_mbpo_torch/debug'
-
-casual:
-    use_casual: True

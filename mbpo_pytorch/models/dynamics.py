@@ -107,9 +107,9 @@ class EnsembleRDynamics(BaseDynamics, ABC):
         # diff_states, rewards is [num_networks, batch_size, *]
         diff_states, rewards = torch.stack(outputs['diff_states'], dim=0), torch.stack(outputs['rewards'], dim=0)
         factored_diff_state_means, factored_diff_state_logvars = \
-            diff_states[:, :self.state_dim], diff_states[:, self.state_dim:]
+            diff_states[..., :self.state_dim], diff_states[..., self.state_dim:]
         factored_reward_means, factored_reward_logvars = \
-            rewards[:, :self.reward_dim], rewards[:, self.reward_dim:]
+            rewards[..., :self.reward_dim], rewards[..., self.reward_dim:]
 
         factored_diff_state_logvars = self.max_diff_state_logvar - \
                                       softplus(self.max_diff_state_logvar - factored_diff_state_logvars)
@@ -220,12 +220,11 @@ class ParallelEnsembleDynamics(BaseDynamics, ABC):
 
         # diff_states, rewards is [num_networks, batch_size, *]
         diff_states, rewards = torch.stack(outputs['diff_states'], dim=0), torch.stack(outputs['rewards'], dim=0)
-        # print(diff_states.shape)
 
         factored_diff_state_means, factored_diff_state_logvars = \
-            diff_states[:, :self.state_dim], diff_states[:, self.state_dim:]
+            diff_states[:, :, :self.state_dim], diff_states[:, :, self.state_dim:]
         factored_reward_means, factored_reward_logvars = \
-            rewards[:, :self.reward_dim], rewards[:, self.reward_dim:]
+            rewards[:, :, :self.reward_dim], rewards[:, :, self.reward_dim:]
 
         factored_diff_state_logvars = self.max_diff_state_logvar - \
                                       softplus(self.max_diff_state_logvar - factored_diff_state_logvars)
