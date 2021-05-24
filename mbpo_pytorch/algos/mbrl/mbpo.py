@@ -94,8 +94,8 @@ class MBPO:
         # size: batch-size * ensemble-size * (state-dim + reward-dim)
         targets = torch.cat([next_states - states, rewards], dim=-1)
         # size: ensemble-size * batch-size * (state-dim + reward-dim)
-        targets = targets.transpose(0, 1).contiguous()
-        masks = masks.transpose(0, 1).contiguous()
+        targets = targets.transpose(0, 1)
+        masks = masks.transpose(0, 1)
 
         if use_var_loss:
             inv_vars = torch.exp(-logvars)

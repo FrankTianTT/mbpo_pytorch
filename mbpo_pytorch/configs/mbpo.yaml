@@ -44,6 +44,4 @@ mbpo:
     max_num_epochs: ~
     real_sample_ratio: 0.
     num_warmup_samples: 5000
-
-casual:
-    use_casual: False
+    network_class: "normal"

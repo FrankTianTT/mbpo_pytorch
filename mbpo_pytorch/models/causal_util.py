@@ -4,7 +4,7 @@ import math
 import numpy as np
 
 from mbpo_pytorch.models.ensemble_util import EnsembleLayer
-from mbpo_pytorch.models.sparse_uitl import EnsembleSparseLayer
+from mbpo_pytorch.models.sparse_util import EnsembleSparseLayer
 from mbpo_pytorch.thirdparty.trace_expm import trace_expm
 from collections import OrderedDict
 

@@ -11,6 +11,7 @@ from torch.distributions import Normal
 from mbpo_pytorch.models.initializer import truncated_norm_init
 from mbpo_pytorch.models.utils import MLP, init
 from mbpo_pytorch.models.ensemble_util import EnsembleModel
+from mbpo_pytorch.models.sparse_util import EnsembleSparseModel
 
 # from .initializer import truncated_norm_init
 # from .utils import MLP, init
@@ -43,8 +44,8 @@ class RDynamics(BaseDynamics, ABC):
     def forward(self, states, actions):
         x = torch.cat([states, actions], dim=-1)
         x = self.diff_dynamics(x)
-        diff_states = x[..., :self.output_state_dim]
-        rewards = x[..., self.output_state_dim:]
+        diff_states = x[:, :self.output_state_dim]
+        rewards = x[:, self.output_state_dim:]
         return {'diff_states': diff_states, 'rewards': rewards}
 
     def predict(self, states, actions, **kwargs):
@@ -106,9 +107,9 @@ class EnsembleRDynamics(BaseDynamics, ABC):
         # diff_states, rewards is [num_networks, batch_size, *]
         diff_states, rewards = torch.stack(outputs['diff_states'], dim=0), torch.stack(outputs['rewards'], dim=0)
         factored_diff_state_means, factored_diff_state_logvars = \
-            diff_states[..., :self.state_dim], diff_states[..., self.state_dim:]
+            diff_states[:, :self.state_dim], diff_states[:, self.state_dim:]
         factored_reward_means, factored_reward_logvars = \
-            rewards[..., :self.reward_dim], rewards[..., self.reward_dim:]
+            rewards[:, :self.reward_dim], rewards[:, self.reward_dim:]
 
         factored_diff_state_logvars = self.max_diff_state_logvar - \
                                       softplus(self.max_diff_state_logvar - factored_diff_state_logvars)
@@ -183,13 +184,21 @@ class EnsembleRDynamics(BaseDynamics, ABC):
 
 class ParallelEnsembleDynamics(BaseDynamics, ABC):
     def __init__(self, state_dim: int, action_dim: int, reward_dim: int, hidden_dims: List[int],
-                 ensemble_size, elite_size, state_normalizer=None, action_normalizer=None):
+                 ensemble_size, elite_size, state_normalizer=None, action_normalizer=None,
+                 network_class='normal'):
         super(ParallelEnsembleDynamics, self).__init__()
         self.state_dim = state_dim
         self.reward_dim = reward_dim
         self.num_networks = ensemble_size
 
-        self.networks = EnsembleModel(state_dim, action_dim, reward_dim, hidden_dims, state_dim, ensemble_size)
+        if network_class == "normal":
+            self.network = EnsembleModel(state_dim, action_dim, reward_dim, hidden_dims, state_dim, ensemble_size)
+        elif network_class == "sparse":
+            self.network = EnsembleSparseModel(state_dim, action_dim, reward_dim, hidden_dims, state_dim, ensemble_size)
+        elif network_class == "causal":
+            raise NotImplementedError
+        else:
+            raise KeyError
 
         self.max_diff_state_logvar = nn.Parameter(torch.ones([1, state_dim]) / 2.)
         self.min_diff_state_logvar = nn.Parameter(-torch.ones([1, state_dim]) * 10.)
@@ -206,7 +215,7 @@ class ParallelEnsembleDynamics(BaseDynamics, ABC):
     def forward(self, states, actions) -> Dict[str, torch.Tensor]:
         # input size: batch-size * ensemble-size * dim
         states, actions = self.state_normalizer(states), self.action_normalizer(actions)
-        outputs = self.networks(states, actions)
+        outputs = self.network(states, actions)
         outputs = {k: [dic[k] for dic in outputs] for k in outputs[0]}
 
         # diff_states, rewards is [num_networks, batch_size, *]
@@ -214,9 +223,9 @@ class ParallelEnsembleDynamics(BaseDynamics, ABC):
         # print(diff_states.shape)
 
         factored_diff_state_means, factored_diff_state_logvars = \
-            diff_states[..., :self.state_dim], diff_states[..., self.state_dim:]
+            diff_states[:, :self.state_dim], diff_states[:, self.state_dim:]
         factored_reward_means, factored_reward_logvars = \
-            rewards[..., :self.reward_dim], rewards[..., self.reward_dim:]
+            rewards[:, :self.reward_dim], rewards[:, self.reward_dim:]
 
         factored_diff_state_logvars = self.max_diff_state_logvar - \
                                       softplus(self.max_diff_state_logvar - factored_diff_state_logvars)
@@ -232,7 +241,7 @@ class ParallelEnsembleDynamics(BaseDynamics, ABC):
                 'reward_logvars': factored_reward_logvars}
 
     def compute_l2_loss(self, l2_loss_coefs: Union[float, List[float]]) -> torch.Tensor:
-        return self.networks.compute_l2_loss(l2_loss_coefs)
+        return self.network.compute_l2_loss(l2_loss_coefs)
 
     def update_elite_indices(self, losses: torch.Tensor) -> np.ndarray:
         elite_indices = torch.argsort(losses)[:self.num_elite_networks].cpu().numpy()
@@ -278,7 +287,7 @@ class ParallelEnsembleDynamics(BaseDynamics, ABC):
             improvement_ratio = ((best_loss - loss) / best_loss) if best_loss else 0.
             if (best_loss is None) or improvement_ratio > 0.1:
                 # print(self.networks.get_state_dict(idx))
-                self.best_snapshots[idx] = (loss, epoch, self.networks.get_state_dict(idx))
+                self.best_snapshots[idx] = (loss, epoch, self.network.get_state_dict(idx))
                 updated = True
         return updated
 
@@ -289,7 +298,7 @@ class ParallelEnsembleDynamics(BaseDynamics, ABC):
     def load_best_snapshots(self) -> List[int]:
         best_epochs = []
         for idx, (_, epoch, state_dict) in enumerate(self.best_snapshots):
-            self.networks.set_state_dict(idx, state_dict)
+            self.network.set_state_dict(idx, state_dict)
             best_epochs.append(epoch)
         return best_epochs
 

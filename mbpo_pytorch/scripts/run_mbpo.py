@@ -14,6 +14,7 @@ from mbpo_pytorch.misc.utils import set_seed, get_seed, log_and_write, evaluate,
 from mbpo_pytorch.models import Actor, QCritic, RunningNormalizer, EnsembleRDynamics, ParallelEnsembleDynamics
 from mbpo_pytorch.storages import SimpleUniversalBuffer as Buffer, MixtureBuffer
 
+
 def main():
     # priv.yaml is used for special config
     config, hparam_dict = Config(['mbpo.yaml', 'halfcheetah.yaml', 'priv.yaml'])
