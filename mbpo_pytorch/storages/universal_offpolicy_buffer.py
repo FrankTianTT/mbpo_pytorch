@@ -7,7 +7,7 @@ import numpy as np
 import torch
 from torch.nn.functional import one_hot
 from torch.utils.data.sampler import RandomSampler, BatchSampler, SubsetRandomSampler
-
+from mbpo_pytorch.storages.ensemble_util import EnsembleBatchSampler
 from mbpo_pytorch.misc import logger
 
 # noinspection DuplicatedCode
@@ -91,6 +91,19 @@ class SimpleUniversalBuffer:
             for name in self.entry_infos.keys():
                 batch_data[name] = self.__dict__[name][indices].clone().\
                     to(self.device)
+                if name in self.entry_num_classes and getattr(self, 'use_onehot_output', False):
+                    batch_data[name] = one_hot(batch_data[name].long(), num_classes=self.entry_num_classes[name]).\
+                        squeeze(-2).float()
+            yield batch_data
+
+    def get_ensemble_batch_generator_epoch(self, batch_size: Optional[int], ranges=None) -> Generator:
+        ranges = range(self.size) if ranges is None else ranges
+        batch_size = batch_size or len(ranges)
+        sampler = EnsembleBatchSampler(ranges, batch_size, drop_last=True)
+        for indices in sampler:
+            batch_data = {}
+            for name in self.entry_infos.keys():
+                batch_data[name] = self.__dict__[name][indices].clone().to(self.device)
                 if name in self.entry_num_classes and getattr(self, 'use_onehot_output', False):
                     batch_data[name] = one_hot(batch_data[name].long(), num_classes=self.entry_num_classes[name]).\
                         squeeze(-2).float()

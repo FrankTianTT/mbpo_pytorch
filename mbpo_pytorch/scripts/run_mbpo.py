@@ -86,7 +86,7 @@ def main():
     model = MBPO(dynamics, mb_config.dynamics_batch_size, rollout_schedule=mb_config.rollout_schedule, verbose=1,
                  lr=mb_config.lr, l2_loss_coefs=config.mbpo.l2_loss_coefs, max_num_epochs=mb_config.max_num_epochs)
     # buffer to train model
-    real_buffer = Buffer(mb_config.real_buffer_size, datatype)
+    real_buffer = Buffer(mb_config.real_buffer_size, datatype, num_networks=mb_config.num_dynamics_networks)
     real_buffer.to(device)
     model.check_buffer(real_buffer)
 

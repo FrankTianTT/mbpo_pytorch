@@ -61,14 +61,9 @@ class MBPO:
 
     def get_ensemble_samples(self, samples: Dict[str, torch.Tensor]):
         attrs = ['states', 'actions', 'next_states', 'rewards', 'masks']
-        batch_size = samples[attrs[0]].shape[0]
-
-        idxes = np.array([np.random.permutation(batch_size) for _ in range(self.num_networks)])
-        idxes = idxes.transpose()
-
         # size: (e.g. states)
         # batch-size * ensemble-size * state-dim
-        return [samples[attr][idxes] for attr in attrs]
+        return [samples[attr].transpose(0, 1) for attr in attrs]
 
     def get_repeat_samples(self, samples: Dict[str, torch.Tensor]):
         attrs = ['states', 'actions', 'next_states', 'rewards', 'masks']
@@ -85,7 +80,6 @@ class MBPO:
         else:
             states, actions, next_states, rewards, masks = self.get_repeat_samples(samples)
 
-        batch_size = states.shape[0]
         # forward use dynamics
         diff_state_means, diff_state_logvars, reward_means, reward_logvars = \
             itemgetter('diff_state_means', 'diff_state_logvars', 'reward_means', 'reward_logvars') \
@@ -133,7 +127,7 @@ class MBPO:
         self.dynamics.reset_best_snapshots()
 
         for epoch in epoch_iter:
-            train_gen = model_buffer.get_batch_generator_epoch(self.batch_size, train_indices)
+            train_gen = model_buffer.get_ensemble_batch_generator_epoch(self.batch_size, train_indices)
             val_gen = model_buffer.get_batch_generator_epoch(None, val_indices)
 
             for samples in train_gen:
