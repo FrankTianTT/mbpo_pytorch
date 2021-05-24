@@ -62,7 +62,9 @@ class MBPO:
     def get_ensemble_samples(self, samples: Dict[str, torch.Tensor]):
         attrs = ['states', 'actions', 'next_states', 'rewards', 'masks']
         batch_size = samples[attrs[0]].shape[0]
-        idxes = np.random.randint(batch_size, size=[batch_size, self.num_networks])
+
+        idxes = np.array([np.random.permutation(batch_size) for _ in range(self.num_networks)])
+        idxes = idxes.transpose()
 
         # size: (e.g. states)
         # batch-size * ensemble-size * state-dim
