@@ -10,5 +10,5 @@ mbpo:
     rollout_schedule: [ 1, 15, 1, 1 ]
     num_total_epochs: 80
     num_warmup_samples: 500
-
+    real_sample_ratio: 0.05
 

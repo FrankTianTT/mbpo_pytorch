@@ -11,4 +11,5 @@ mbpo:
     dynamics_hidden_dims: [400, 400, 400, 400]
     num_model_retain_epochs: 5
     model_update_interval: 1000
+    real_sample_ratio: 0.05
 

@@ -3,8 +3,9 @@ env:
     max_episode_steps: 1000
 
 sac:
-    target_entropy: ~
+    target_entropy: -1
     num_grad_steps: 20
 
 mbpo:
     rollout_schedule: [ 20, 150, 1, 15 ]
+    real_sample_ratio: 0.05
